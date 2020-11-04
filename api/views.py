@@ -6,5 +6,4 @@ import httpx
 from django.http import HttpResponse
 from django.shortcuts import render
 
-# TODO django-json-rpc / django-modern-rpc?
 # TODO vkwave send
