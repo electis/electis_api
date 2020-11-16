@@ -27,7 +27,7 @@ def ok_send():
     return
 
 @rpc_method(name='vk')
-def vk_send(login, password, owner_id, text, pict, token):
+def vk_send(owner_id, text, pict, token):
     vk_session = vk_api.VkApi(token=token)
     # vk_session = vk_api.VkApi(login, password, auth_handler=two_factor)
     # try:
