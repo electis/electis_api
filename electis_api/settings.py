@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'api.apps.ApiConfig',
     'social.apps.SocialConfig',
     'modernrpc',
+    'simple_history',
 ]
 
 MIDDLEWARE = [

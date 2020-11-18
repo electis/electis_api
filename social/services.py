@@ -1,8 +1,12 @@
 '''
 social services, class name = service name, methods: post, ...
 '''
+from abc import ABC, abstractmethod
+from typing import Union
+
 import requests
 import vk_api
+from benedict import benedict
 
 
 def url_exists(path):
@@ -10,14 +14,40 @@ def url_exists(path):
     return r.status_code == requests.codes.ok
 
 
-class VK:
+class ServiceFactory(ABC):
+    @abstractmethod
+    def post(self, token, owner, text=None, pict=None) -> Union[int, str, None]:
+        '''
+        post message to social service
+        :param token: access token
+        :param owner: group or user id
+        :param text: message text
+        :param pict: message picture
+        :return: post_id or None
+        '''
+        pass
+
+    @abstractmethod
+    def auth(self, login, password) -> str:
+        '''
+        provide auth in social service
+        :param login:
+        :param password:
+        :return: access token
+        '''
+        pass
+
+
+class VK(ServiceFactory):
     def post(self, token, owner, text=None, pict=None):
         vk_session = vk_api.VkApi(token=token)
         if not url_exists(pict):
             pict = None
         vk = vk_session.get_api()
         result = vk.wall.post(message=text, attachments=pict, owner_id=owner)
-        return result
+        # d = benedict(result).get_str(data_fields['post_id'])
+        if result and 'post_id' in result:
+            return result['post_id']
 
     @staticmethod
     def two_factor():
@@ -32,7 +62,8 @@ class VK:
         try:
             vk_session.auth()
         except vk_api.AuthError as exc:
-            return exc
+            raise
         token = vk_session.token
         # result = vk.wall.get(owner_id=owner_id)
         # print(vk_session.token)
+        return token

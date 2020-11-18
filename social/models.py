@@ -11,11 +11,17 @@ from social import methods
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True)
 
+    def __str__(self):
+        return self.user.username
+
 
 class Service(models.Model):
-    name = models.CharField(max_length=32, blank=True, default='')
-    data_fields = models.JSONField(default={'token': []}, blank=True)
+    name = models.CharField(max_length=32, blank=True, default='')  # choice field
+    data_fields = models.JSONField(default=dict, blank=True, help_text='path for token/owner/etc in service data')
     active = models.BooleanField(default=False)
+
+    def __str__(self):
+        return self.name
 
 
 class ProfileServiceData(models.Model):
@@ -23,10 +29,13 @@ class ProfileServiceData(models.Model):
     service = models.ForeignKey(Service, on_delete=models.CASCADE)
     owner = models.CharField(max_length=32, default='')
     token = models.CharField(max_length=128, default='')
-    # data = models.JSONField(default=dict, blank=True)
+    data = models.JSONField(default=dict, blank=True)
 
     class Meta:
         unique_together = ('profile', 'service', 'owner')
+
+    def __str__(self):
+        return f'{self.profile} - {self.service}'
 
 
 class Message(models.Model):
@@ -38,14 +47,28 @@ class Message(models.Model):
     date = models.DateTimeField(default=timezone.now, blank=True)
     draft = models.BooleanField(default=True)
 
+    def __str__(self):
+        return f'{self.profile} - {self.date}'
+
+    def save(self, **kwargs):
+        for service_pk in self.services.values_list('pk', flat=True):
+            MessageServiceStatus.objects.get_or_create(message_id=self.pk, service_id=service_pk,
+                                                       defaults={'posted': False})
+        return super().save(**kwargs)
+
 
 class MessageServiceStatus(models.Model):
     message = models.ForeignKey(Message, on_delete=models.CASCADE)
     service = models.ForeignKey(Service, on_delete=models.CASCADE)
     posted = models.BooleanField(default=False)
+    posted_at = models.DateTimeField(null=True, blank=True)
+    data = models.JSONField(default=dict, blank=True, help_text='post_id, etc')
 
     class Meta:
         unique_together = ('message', 'service')
+
+    def __str__(self):
+        return f'{self.service} - {self.message}'
 
 
 class Log(models.Model):
@@ -77,11 +100,11 @@ class Log(models.Model):
     def get_func_name():
         import traceback
         stack = traceback.extract_stack()
-        _, _, func_name, _ = stack[-2]
+        _, _, func_name, _ = stack[-3]
         return func_name
 
     @staticmethod
-    def error_log(action: str, params='', result: Union[str, Exception]=''):
+    def error_log(action: str, params='', result: Union[str, Exception] = ''):
         if isinstance(result, Exception):
             result = methods.get_detail_exception_info(result)
         return Log.objects.create(
@@ -100,7 +123,7 @@ class Log(models.Model):
             status=Log.STATUS_INFO
         )
 
-    def log_update(self, result: Union[str, Exception]='', status: int = None):
+    def log_update(self, result: Union[str, Exception] = '', status: int = None):
         if isinstance(result, Exception):
             result = methods.get_detail_exception_info(result)
             if not status:
