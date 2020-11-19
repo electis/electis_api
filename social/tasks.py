@@ -27,11 +27,14 @@ def proceed_not_posted_messages():
 
 def post_message(pk):
     message = models.Message.objects.get(pk=pk)
-    service_qset = message.services.filter(active=True, message__messageservicestatus__posted=False)
+    service_qset = message.services.filter(active=True, messageservicestatus__posted=False)
     for service in service_qset:
         method = getattr(services, service.name)()
-        data = message.profile.profileservicedata_set.get(service=service)
-        result = method.post(text=message.text, pict=message.pict, owner=data.owner, token=data.token)
+        user_data = message.profile.profileservicedata_set.filter(
+            service=service).values_list('data', flat=True).first()
+        result = method.post(
+            message=message, service_data=service.data, user_data=user_data
+        )
         if result:
             status, _ = models.MessageServiceStatus.objects.get_or_create(message_id=pk, service=service)
             status.posted = True

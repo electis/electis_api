@@ -5,3 +5,4 @@ six==1.15.0
 vk_api==11.9.0
 django-simple-history==2.12.0
 python-benedict==0.22.0
+ok-api==1.0.1

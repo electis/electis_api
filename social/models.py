@@ -17,7 +17,7 @@ class Profile(models.Model):
 
 class Service(models.Model):
     name = models.CharField(max_length=32, blank=True, default='')  # choice field
-    data_fields = models.JSONField(default=dict, blank=True, help_text='path for token/owner/etc in service data')
+    data = models.JSONField(default=dict, blank=True, help_text='service (application) data')
     active = models.BooleanField(default=False)
 
     def __str__(self):
@@ -27,12 +27,7 @@ class Service(models.Model):
 class ProfileServiceData(models.Model):
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE)
     service = models.ForeignKey(Service, on_delete=models.CASCADE)
-    owner = models.CharField(max_length=32, default='')
-    token = models.CharField(max_length=128, default='')
     data = models.JSONField(default=dict, blank=True)
-
-    class Meta:
-        unique_together = ('profile', 'service', 'owner')
 
     def __str__(self):
         return f'{self.profile} - {self.service}'
@@ -51,13 +46,14 @@ class Message(models.Model):
         return f'{self.profile} - {self.date}'
 
     def save(self, **kwargs):
+        super().save(**kwargs)
         for service_pk in self.services.values_list('pk', flat=True):
             MessageServiceStatus.objects.get_or_create(message_id=self.pk, service_id=service_pk,
                                                        defaults={'posted': False})
-        return super().save(**kwargs)
 
 
 class MessageServiceStatus(models.Model):
+    id = models.BigAutoField(primary_key=True)
     message = models.ForeignKey(Message, on_delete=models.CASCADE)
     service = models.ForeignKey(Service, on_delete=models.CASCADE)
     posted = models.BooleanField(default=False)
@@ -82,6 +78,7 @@ class Log(models.Model):
         (STATUS_WARNING, 'предупреждение'),
         (STATUS_ERROR, 'ошибка'),
     )
+    id = models.BigAutoField(primary_key=True)
     action = models.CharField(max_length=32)
     status = models.SmallIntegerField(choices=STATUSES, default=STATUS_INFO)
     params = models.CharField(max_length=64)
@@ -97,13 +94,6 @@ class Log(models.Model):
         return self.result[:64]
 
     @staticmethod
-    def get_func_name():
-        import traceback
-        stack = traceback.extract_stack()
-        _, _, func_name, _ = stack[-3]
-        return func_name
-
-    @staticmethod
     def error_log(action: str, params='', result: Union[str, Exception] = ''):
         if isinstance(result, Exception):
             result = methods.get_detail_exception_info(result)
@@ -117,7 +107,7 @@ class Log(models.Model):
     @staticmethod
     def info_log(action='', params='', result=''):
         return Log.objects.create(
-            action=action or Log.get_func_name(),
+            action=action or methods.get_func_name(),
             params=str(params),
             result=str(result),
             status=Log.STATUS_INFO

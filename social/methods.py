@@ -3,7 +3,12 @@ methods not used models
 '''
 import os
 import sys
+import traceback
 
+
+def get_func_name(level=-3):
+    _, _, func_name, _ = traceback.extract_stack()[level]
+    return func_name
 
 def get_detail_exception_info(exception_object: Exception):
     """

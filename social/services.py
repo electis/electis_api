@@ -6,7 +6,10 @@ from typing import Union
 
 import requests
 import vk_api
-from benedict import benedict
+from ok_api import OkApi, Upload
+# from benedict import benedict  # dict value by path, etc: https://github.com/fabiocaccamo/python-benedict
+
+from social.models import Message
 
 
 def url_exists(path):
@@ -16,7 +19,7 @@ def url_exists(path):
 
 class ServiceFactory(ABC):
     @abstractmethod
-    def post(self, token, owner, text=None, pict=None) -> Union[int, str, None]:
+    def post(self, message: Message, service_data: dict, user_data: dict) -> Union[int, str, None]:
         '''
         post message to social service
         :param token: access token
@@ -39,14 +42,16 @@ class ServiceFactory(ABC):
 
 
 class VK(ServiceFactory):
-    def post(self, token, owner, text=None, pict=None):
-        vk_session = vk_api.VkApi(token=token)
-        if not url_exists(pict):
+    def post(self, message: Message, service_data: dict = None, user_data: dict = None) -> Union[int, str, None]:
+        vk_session = vk_api.VkApi(token=user_data['token'])
+        owner_id = user_data['owner_id']
+        pict = message.pict
+        if pict and not url_exists(pict):
             pict = None
         vk = vk_session.get_api()
-        result = vk.wall.post(message=text, attachments=pict, owner_id=owner)
+        result = vk.wall.post(message=message.text, attachments=pict, owner_id=owner_id)
         # d = benedict(result).get_str(data_fields['post_id'])
-        if result and 'post_id' in result:
+        if isinstance(result, dict) and 'post_id' in result:
             return result['post_id']
 
     @staticmethod
@@ -67,3 +72,58 @@ class VK(ServiceFactory):
         # result = vk.wall.get(owner_id=owner_id)
         # print(vk_session.token)
         return token
+
+
+class OK(ServiceFactory):
+    def post(self, message: Message, service_data: dict = None, user_data: dict = None) -> Union[int, str, None]:
+        # https://apiok.ru/dev/methods/rest/mediatopic/mediatopic.post
+        ok = OkApi(access_token=service_data['access_token'],  # or service access?
+                   application_key=service_data['application_key'],
+                   application_secret_key=service_data['application_secret_key'])
+        media = {}
+        if message.text:
+            media.update({
+                "type": "text",
+                "text": message.text
+            })
+        if False and message.pict and url_exists(message.pict):
+            # TODO нужен путь к картинке, а в ВК - урл
+            pict_path = message.pict
+            upload = Upload(ok)
+            upload_response = upload.photo(photos=[pict_path])
+            # TODO надо?
+            # for photo_id in upload_response['photos']:
+            #   token = upload_response['photos'][photo_id]['token']
+            #   response = ok.photosV2.commit(photo_id=photo_id, token=token)
+            media.update({
+                "type": "photo",
+                "list": [{"photo_id": upload_response['photos'][0]}]
+            })
+        params = {
+            'text_link_preview': True,  # Обрабатывать ссылку в тексте
+            'attachment': {
+                'media': [media]
+            }
+        }
+        # если пост в группу
+        if 'gid' in user_data:
+            params.update({
+                'gid': user_data['gid'],
+                'type': 'GROUP_THEME',
+            })
+        else:
+            params.update({
+                'uid': user_data['uid'],
+            })
+        result = ok.mediatopic.post(**params)
+        if result.status_code != 200:
+            raise Exception(f'OK status_code: {result.status_code}')
+        result_json = result.json()
+        # TODO {'error_code': 104, 'error_msg': 'PARAM_SIGNATURE : Invalid signature f71f55844d96fa53b74b560fb6a955c2, calculated by string application_key=CCNDIMJGDIHBABABAattachment=mediagid=58695245955153method=mediatopic.posttext_link_preview=Truetype=GROUP_THEME********SECRET KEY*******', 'error_data': None}
+        print(result_json)
+        if 'error_code' in result_json:
+            raise Exception(f'OK error: {result_json}')
+        return
+
+    def auth(self, login, password) -> str:
+        pass
