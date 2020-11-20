@@ -80,29 +80,34 @@ class OK(ServiceFactory):
         ok = OkApi(access_token=service_data['access_token'],  # or service access?
                    application_key=service_data['application_key'],
                    application_secret_key=service_data['application_secret_key'])
-        media = {}
+        response = ok.friends.get(sort_type='PRESENT')
+        print(response.json())
+        media = []
         if message.text:
-            media.update({
+            media.append({
                 "type": "text",
                 "text": message.text
             })
-        if False and message.pict and url_exists(message.pict):
+        if message.pict:
             # TODO нужен путь к картинке, а в ВК - урл
             pict_path = message.pict
             upload = Upload(ok)
             upload_response = upload.photo(photos=[pict_path])
             # TODO надо?
-            # for photo_id in upload_response['photos']:
-            #   token = upload_response['photos'][photo_id]['token']
-            #   response = ok.photosV2.commit(photo_id=photo_id, token=token)
-            media.update({
+            for photo_id in upload_response['photos']:
+                token = upload_response['photos'][photo_id]['token']
+                response = ok.photosV2.commit(photo_id=photo_id, token=token)
+            media.append({
                 "type": "photo",
-                "list": [{"photo_id": upload_response['photos'][0]}]
+                "list": [
+                    {"id": list(upload_response['photos'].keys())[0]},
+                    {"photoId": response.json()['photos'][0]['assigned_photo_id']},
+                ]
             })
         params = {
-            'text_link_preview': True,  # Обрабатывать ссылку в тексте
+            # 'text_link_preview': True,  # Обрабатывать ссылку в тексте
             'attachment': {
-                'media': [media]
+                'media': media
             }
         }
         # если пост в группу

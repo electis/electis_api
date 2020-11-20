@@ -27,7 +27,7 @@ def proceed_not_posted_messages():
 
 def post_message(pk):
     message = models.Message.objects.get(pk=pk)
-    service_qset = message.services.filter(active=True, messageservicestatus__posted=False)
+    service_qset = message.services.filter(active=True, messageservicestatus__posted=False).distinct()
     for service in service_qset:
         method = getattr(services, service.name)()
         user_data = message.profile.profileservicedata_set.filter(
